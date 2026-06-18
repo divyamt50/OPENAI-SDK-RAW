@@ -1,17 +1,40 @@
-from llm import async_client
-from fastapi import FastAPI
-from pydantic import BaseModel
+import os
+from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
+from schema import Ask
 
-app = FastAPI()
+load_dotenv()
 
-class Ask(BaseModel):
-    query:str
+GROQ_URL = os.getenv("GROQ_URL")
 
-@app.post('/get_response')
-async def get_response(query:Ask):
-    resp = await async_client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role":"user","content":query.query}]
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    app.state.llm = AsyncOpenAI(
+        api_key=GROQ_URL,
+        base_url="https://api.groq.com/openai/v1"
     )
 
-    return {"answer":f"{resp.choices[0].message.content}"}
+    yield
+
+    app.state.llm.close()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.get('/')
+async def health_check():
+    return {"msg":"everything fine"}
+
+@app.post('/query')
+async def ask_question(request:Request, body:Ask):
+    client = request.app.state.llm
+
+    resp = await client.chat.completions.create(
+        model = "llama-3.1-8b-instant",
+        messages = [{"role":"user", "content":f"{body.query}"}]
+    )
+
+    return {
+        "response":resp.choices[0].message.content
+    }
