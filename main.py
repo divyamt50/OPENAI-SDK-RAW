@@ -1,18 +1,17 @@
-import os
-from openai import OpenAI
-from dotenv import load_dotenv
-load_dotenv()
+from llm import async_client
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-GROQ_URL = os.getenv("GROQ_URL")
+app = FastAPI()
 
-client = OpenAI(
-    api_key=GROQ_URL,
-    base_url="https://api.groq.com/openai/v1"
-)
+class Ask(BaseModel):
+    query:str
 
-resp = client.chat.completions.create(
-    model="llama-3.1-8b-instant",
-    messages=[{"role":"user", "content":"What is deadpool's real name"}]
-)
+@app.post('/get_response')
+async def get_response(query:Ask):
+    resp = await async_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role":"user","content":query.query}]
+    )
 
-print(resp.choices[0].message.content)
+    return {"answer":f"{resp.choices[0].message.content}"}
