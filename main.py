@@ -4,12 +4,23 @@ from contextlib import asynccontextmanager
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from schema import Ask
+from fastapi.responses import StreamingResponse
+import logging
 
 load_dotenv()
 
 GROQ_URL = os.getenv("GROQ_URL")
 history = [{"role":"system","content":"You are concise."}]
 
+logger = logging.getLogger(__name__)
+
+def log_cost(usage):
+    logger.info(
+        "Prompt tokens, completion tokens, Token usage",
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        usage.total_tokens
+    )
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
@@ -42,18 +53,53 @@ async def ask_question(request:Request, body:Ask):
     }
 
 @app.post('/turn_query')
-async def turn(request:Request, user_query:Ask) -> str:
+async def turn(request:Request, user_query:Ask):
     user_input = {"role":"user", "content":user_query.query}
     history.append(user_input)
     client = request.app.state.llm
 
     resp = await client.chat.completions.create(
         model = "llama-3.1-8b-instant",
-        messages = history
+        messages = history,
+        temperature = 0.7,
+        max_tokens = 500
     )
 
     response_final = resp.choices[0].message.content
 
     history.append({"role":"assistant", "content":response_final})
 
-    return response_final
+    user_tokens = resp.usage.prompt_tokens
+    completion_tokens = resp.usage.completion_tokens
+    total_tokens = resp.usage.total_tokens
+    role = resp.choices[0].message.role
+    finish_reason = resp.choices[0].finish_reason
+
+    return {
+        "response":response_final,
+        "user_tokens":user_tokens,
+        "completion_tokens":completion_tokens,
+        "total_tokens":total_tokens,
+        "role":role,
+        "finish_reason":finish_reason
+    }
+
+
+
+@app.post("/streaming-responses")
+async def get_streaming_response(request:Request, query:Ask):
+    client = request.app.state.llm
+    async def streaming_response():
+        stream = await client.chat.completions.create(
+            model = "llama-3.1-8b-instant",
+            messages = [{"role":"user", "content":query.query}],
+            stream = True,
+            stream_options = {"include_usage":True}
+        )
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+            if chunk.usage:
+                log_cost(chunk.usage)
+        
+    return StreamingResponse(streaming_response(), media_type = "text/plain")
