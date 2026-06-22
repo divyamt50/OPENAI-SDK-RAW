@@ -132,3 +132,43 @@ tools = [
         }
     }
 ]
+
+@app.post("/chat/tools")
+async def answer_with_tools(request:Request, user_questions:str)-> str:
+    client = request.app.state.llm
+    messages = [{"role":"user", "content":user_questions}]
+
+    first = await client.chat.completions.create(
+        model = "llama-3.3-70b-versatile",
+        messages = messages,
+        tools = tools
+    )
+
+    msg = first.choices[0].message
+
+    if not msg.tool_calls:
+        return msg.content
+    
+    messages.append(msg)
+
+    for call in msg.tool_calls:
+        args = json.loads(call.function.parameters)
+        if call.function.name == "city_weather":
+            result = city_weather(**args)
+        else:
+            result = {"error":f"unknown tool call {call.function.name}"}
+
+        messages.append(
+            {
+                "role":"tool",
+                "tool_call_id":call.id,
+                "content":json.dumps(result)
+            }
+        )
+
+    second = await client.chat.completions.create(
+        model = "llama-3.3-70b-versatile",
+        messages = messages
+    )
+
+    return second.choices[0].message.content
