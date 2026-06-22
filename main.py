@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
-from schema import Ask
+from schema import *
 from fastapi.responses import StreamingResponse
 import logging
 import json
@@ -193,6 +193,30 @@ async def get_vector(body:Ask):
         "vector":resp.data[0].embedding,
         "dimensions":len(resp.data[0].embedding),
         "first_four_elements":resp.data[0].embedding[:4]
+    }
+
+    return res
+
+@app.post("/chat/batch_embedding")
+async def batch_embedding(body:AskList):
+    embedder = AsyncOpenAI(
+        api_key=os.getenv("GEMINI_API"),
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
+
+    resp = await embedder.embeddings.create(
+        model="gemini-embedding-001",
+        input=body.queries
+    )
+
+    vector = [d.embedding for d in resp.data]
+    dimensions = len(vector)
+    length_per_index = len(vector[0])
+
+    res = {
+        "vector":vector,
+        "dimensions":dimensions,
+        "length_per_index":length_per_index
     }
 
     return res
