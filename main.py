@@ -172,3 +172,27 @@ async def answer_with_tools(request:Request, user_questions:str)-> str:
     )
 
     return second.choices[0].message.content
+
+
+
+@app.post("/chat/embeddings")
+async def get_vector(body:Ask):
+    embedder = AsyncOpenAI(
+        api_key=os.getenv("GEMINI_API"),
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
+
+    resp = await embedder.embeddings.create(
+        model="gemini-embedding-001",
+        input=body.query
+    )
+
+    print({"resp":resp})
+
+    res = {
+        "vector":resp.data[0].embedding,
+        "dimensions":len(resp.data[0].embedding),
+        "first_four_elements":resp.data[0].embedding[:4]
+    }
+
+    return res
