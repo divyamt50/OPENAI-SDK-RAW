@@ -210,13 +210,13 @@ async def batch_embedding(body:AskList):
     )
 
     vector = [d.embedding for d in resp.data]
-    dimensions = len(vector)
-    length_per_index = len(vector[0])
+    num_of_embeddings = len(vector)
+    embedding_dimension = len(vector[0])
 
     res = {
         "vector":vector,
-        "dimensions":dimensions,
-        "length_per_index":length_per_index
+        "num_of_embeddings":num_of_embeddings,
+        "embedding_dimension":embedding_dimension
     }
 
     return res
