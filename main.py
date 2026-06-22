@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from schema import Ask
 from fastapi.responses import StreamingResponse
 import logging
+import json
 
 load_dotenv()
 
@@ -103,3 +104,31 @@ async def get_streaming_response(request:Request, query:Ask):
                 log_cost(chunk.usage)
         
     return StreamingResponse(streaming_response(), media_type = "text/plain")
+
+def city_weather(city:str, unit:str = "celsius")-> dict:
+    return {"city":city, "temp": 31, "unit":unit, "conditions":"humid"}
+
+tools = [
+    {
+        "type":"function",
+        "function":{
+            "name":"city_weather",
+            "description":"function to get weather condition of a given city",
+            "parameters":{
+                "type":"object",
+                "properties":{
+                    "city":{
+                        "type":"string",
+                        "description":"name of the city"
+                    },
+                    "unit":{
+                        "type":"string",
+                        "enum":["celsius", "fahrenheit"],
+                        "description":"Temperature unit"
+                    }
+                },
+                "required":["city"]
+            }
+        }
+    }
+]
