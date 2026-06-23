@@ -7,6 +7,7 @@ from schema import *
 from fastapi.responses import StreamingResponse
 import logging
 import json
+import tiktoken
 
 load_dotenv()
 
@@ -220,3 +221,9 @@ async def batch_embedding(body:AskList):
     }
 
     return res
+
+@app.post("/count_tokens")
+async def count_tokens(query:Ask):
+    enc = tiktoken.get_encoding("o200k_base")
+    n_tokens = len(enc.encode(query.query))
+    return n_tokens
