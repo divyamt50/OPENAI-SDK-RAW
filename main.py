@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 import logging
 import json
 import tiktoken
+from asyncio import Semaphore
+from get_cost_backoff import *
 
 load_dotenv()
 
@@ -227,3 +229,35 @@ async def count_tokens(query:Ask):
     enc = tiktoken.get_encoding("o200k_base")
     n_tokens = len(enc.encode(query.query))
     return n_tokens
+
+# writing a fast api that will return 
+
+
+@app.post('/chat/stream-output')
+async def chat_stream_output(body:Ask):
+    client:AsyncOpenAI = app.state.llm
+    sem:Semaphore = app.state.sem
+
+    messages = [{"role":"user", "messages":body.query}]
+
+    async def generate():
+        async with sem:
+            try:
+                stream = await stream_output(client, messages)
+            except Exception as e:
+                logger.error(e)
+                yield "[error: Service busy please retry]"
+                return
+            
+            usage = None
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+                if chunk.usage:
+                    usage = chunk.usage
+            
+            if usage:
+                logger.info(
+                    f"llm_call model = {MODEL} in = {usage.prompt_token} out = {usage.completion_token} total = {usage.total_tokens} cost = {count_usd(MODEL, usage)}")
+            
+    return StreamingResponse(generate(), media_type="text/plain")
